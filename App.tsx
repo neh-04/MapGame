@@ -5,8 +5,12 @@ import CloudBackground from './components/CloudBackground';
 import { GameMode, MapRegion, GeoFeature } from './types';
 import { speak, playSoundEffect, musicPlayer } from './services/audioService';
 import { getFunFact } from './services/geminiService';
+import { mapService } from './services/mapService';
 
 const App: React.FC = () => {
+  useEffect(() => {
+    mapService.preloadMaps();
+  }, []);
   const [mode, setMode] = useState<GameMode>(GameMode.MENU);
   const [region, setRegion] = useState<MapRegion>(MapRegion.WORLD);
   const [isMusicOn, setIsMusicOn] = useState(false);
