@@ -1,37 +1,15 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { FunFactResponse } from "../types";
+import { getLocalFact } from "./facts";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// Kept same signature to minimize code changes in App.tsx
 export const getFunFact = async (locationName: string): Promise<FunFactResponse> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Tell me one very short, super fun, simple fact about ${locationName} for a 5-year-old child. 
-                 It must be under 15 words. Also pick a relevant emoji.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            fact: { type: Type.STRING },
-            emoji: { type: Type.STRING },
-          },
-          required: ["fact", "emoji"],
-        },
-      },
-    });
+  // Simulate a small delay to make it feel "active" (optional, can be removed for instant speed)
+  // return new Promise((resolve) => {
+  //   setTimeout(() => {
+  //       resolve(getLocalFact(locationName));
+  //   }, 300);
+  // });
 
-    const result = JSON.parse(response.text || '{}');
-    return {
-      fact: result.fact || `Explore ${locationName}!`,
-      emoji: result.emoji || '🌍',
-    };
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return {
-      fact: "A wonderful place to visit!",
-      emoji: "🌟",
-    };
-  }
+  return getLocalFact(locationName);
 };
+
