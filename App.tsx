@@ -139,9 +139,12 @@ const App: React.FC = () => {
 
       {/* Top Bar */}
       <div className="flex-none z-20 flex justify-between items-center p-4">
-        <div className="bg-white/90 backdrop-blur-sm rounded-full px-6 py-2 shadow-lg flex items-center gap-2">
+        <div className="bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 md:px-6 shadow-lg flex items-center gap-2">
           <span className="text-2xl">🧭</span>
-          <span className="font-extrabold text-sky-600 text-lg hidden md:inline">Tiny Explorers</span>
+          <div className="flex flex-col">
+            <span className="font-extrabold text-sky-600 text-base md:text-lg leading-none">Tiny Explorers</span>
+            <span className="text-[10px] text-sky-400 font-bold leading-none">Made by Neha</span>
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -204,16 +207,18 @@ const App: React.FC = () => {
 
             {/* Map - Give it min-height so it's usable on mobile */}
             <div className="w-full relative flex-grow min-h-[50vh] md:min-h-0">
-              <MapComponent
-                region={region}
-                onRegionClick={handleRegionClick}
-                highlightName={mode === GameMode.FIND ? currentTarget : null}
-                correctName={correctName}
-                errorName={errorName}
-                hintName={mistakesInRound > 2 ? currentTarget : null} // Smart Hint
-                showLabels={mode === GameMode.LEARN}
-              />
-              {showConfetti && <Confetti />}
+              <div className="absolute inset-0">
+                <MapComponent
+                  region={region}
+                  onRegionClick={handleRegionClick}
+                  highlightName={mode === GameMode.FIND ? currentTarget : null}
+                  correctName={correctName}
+                  errorName={errorName}
+                  hintName={mistakesInRound > 2 ? currentTarget : null} // Smart Hint
+                  showLabels={mode === GameMode.LEARN}
+                />
+                {showConfetti && <Confetti />}
+              </div>
             </div>
 
             {/* Character Box / HUD - Stack naturally */}
