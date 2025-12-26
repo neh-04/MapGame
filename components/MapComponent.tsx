@@ -13,9 +13,9 @@ interface MapComponentProps {
 }
 
 const MAP_URLS = {
-  [MapRegion.WORLD]: 'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson',
-  [MapRegion.INDIA]: 'https://raw.githubusercontent.com/geohacker/india/master/state/india_telengana.geojson',
-  [MapRegion.ASIA]: 'https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson',
+  [MapRegion.WORLD]: '/assets/maps/world.geojson',
+  [MapRegion.INDIA]: '/assets/maps/india.geojson',
+  [MapRegion.ASIA]: '/assets/maps/world.geojson', // Reuse world map and filter
 };
 
 const MapComponent: React.FC<MapComponentProps> = ({ 
@@ -28,10 +28,13 @@ const MapComponent: React.FC<MapComponentProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  
   const [geoData, setGeoData] = useState<MapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  
+  const [activeRegion, setActiveRegion] = useState<MapRegion | null>(null);
+
   const colors = useMemo(() => [
     '#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#A0C4FF', '#BDB2FF', '#FFC6FF'
   ], []);
@@ -43,35 +46,26 @@ const MapComponent: React.FC<MapComponentProps> = ({
     const updateDimensions = () => {
       if (containerRef.current) {
         const { width, height } = containerRef.current.getBoundingClientRect();
-        // Only update if dimensions actually changed to avoid loop
         setDimensions(prev => {
-            if (prev.width === width && prev.height === height) return prev;
+            if (Math.abs(prev.width - width) < 5 && Math.abs(prev.height - height) < 5) return prev;
             return { width, height };
         });
       }
     };
 
-    // Initial measurement
     updateDimensions();
-
-    const resizeObserver = new ResizeObserver(() => {
-      // Wrap in requestAnimationFrame to avoid "ResizeObserver loop limit exceeded" error
-      window.requestAnimationFrame(() => {
-        updateDimensions();
-      });
-    });
-
+    const resizeObserver = new ResizeObserver(() => requestAnimationFrame(updateDimensions));
     resizeObserver.observe(containerRef.current);
-
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Fetch Data
+  // Fetch Data (Only when region changes)
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         const response = await fetch(MAP_URLS[region]);
+        if (!response.ok) throw new Error('Failed to load map data');
         const data = await response.json();
         let processedData: MapData = data;
 
@@ -82,7 +76,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
              features: data.features.filter((f: any) => asiaCountries.includes(f.properties.name))
            };
         } else if (region === MapRegion.INDIA) {
-            processedData.features = processedData.features.map(f => ({
+            processedData.features = processedData.features.map((f: any) => ({
                 ...f,
                 properties: {
                     ...f.properties,
@@ -91,19 +85,25 @@ const MapComponent: React.FC<MapComponentProps> = ({
             }));
         }
         setGeoData(processedData);
+        setActiveRegion(region); // Track valid data source
       } catch (err) {
         console.error("Failed to load map data", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-  }, [region]);
+    
+    // Only fetch if we switched regions
+    if (activeRegion !== region) {
+        fetchData();
+    }
+  }, [region, activeRegion]);
 
-  // Render D3 Map
+  // Initial Draw (Mount or Region/Size Change) - Expensive
   useEffect(() => {
     if (!geoData || !svgRef.current || !containerRef.current || dimensions.width === 0 || dimensions.height === 0) return;
 
+    // Clear previous
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();
 
@@ -112,14 +112,14 @@ const MapComponent: React.FC<MapComponentProps> = ({
     const pathGenerator = d3.geoPath().projection(projection);
 
     const g = svg.append("g");
+    gRef.current = g; // Save ref for updates
 
-    // Zoom behavior
+    // Zoom setup
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 8]) // 1x to 8x zoom
-      .translateExtent([[0, 0], [width, height]]) // Limit panning roughly to container
+      .scaleExtent([1, 8])
+      .translateExtent([[0, 0], [width, height]])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
-        // Semantic zoom: adjust stroke width based on zoom level
         g.selectAll("path").attr("stroke-width", 1.5 / event.transform.k);
       });
 
@@ -135,7 +135,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
     merge.append("feMergeNode").attr("in", "offsetblur");
     merge.append("feMergeNode").attr("in", "SourceGraphic");
 
-    // Draw Countries/States
+    // Draw Paths (Base State)
     g.selectAll("path")
       .data(geoData.features)
       .join("path")
@@ -145,14 +145,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
       .attr("stroke-width", 1.5)
       .attr("stroke-linejoin", "round")
       .style("filter", "url(#drop-shadow)")
-      .attr("fill", (d, i) => {
-         const name = d.properties.name;
-         if (name === correctName) return "#4ade80"; // Bright Green
-         if (name === errorName) return "#ef4444"; // Bright Red
-         return colors[i % colors.length];
-      })
+      .attr("fill", (d, i) => colors[i % colors.length]) // Initial color
       .on("click", (event, d) => {
-          event.stopPropagation(); // prevent zoom trigger if conflict
+          event.stopPropagation();
           onRegionClick(d);
       });
 
@@ -168,50 +163,69 @@ const MapComponent: React.FC<MapComponentProps> = ({
       .attr("text-anchor", "middle")
       .attr("dy", ".35em")
       .text((d: any) => {
-         const name = d.properties.name;
-         // Hide labels if showLabels is false, but allow the correctly found one to show as a reward
-         if (!showLabels && name !== correctName) return "";
-
-         // Calculate approximate area to decide if we show text
-         // This prevents clutter on tiny islands
-         const area = pathGenerator.area(d);
-         // Lower threshold for zoomed in interaction, but initial view needs to be clean
-         if (area < 800 && region === MapRegion.WORLD) return ""; 
-         if (area < 300) return ""; 
-         
-         // Shorten very long names for display if needed
-         return name && name.length > 15 ? name.substring(0, 12) + '...' : name;
+          const name = d.properties.name;
+          // Logic for labels
+          const area = pathGenerator.area(d);
+          if (area < 300) return ""; 
+          if (region === MapRegion.WORLD && area < 800) return "";
+          return name && name.length > 15 ? name.substring(0, 12) + '...' : name;
       })
+      .attr("class", "map-label")
       .style("font-family", "Fredoka")
-      .style("font-size", "10px") // Base size
-      .style("fill", "#1f2937") // Gray-800
-      .style("pointer-events", "none") // Click through text
+      .style("font-size", "10px")
+      .style("fill", "#1f2937")
+      .style("pointer-events", "none")
       .style("text-shadow", "2px 0 rgba(255,255,255,0.8), -2px 0 rgba(255,255,255,0.8), 0 2px rgba(255,255,255,0.8), 0 -2px rgba(255,255,255,0.8)")
       .style("font-weight", "600")
-      .style("opacity", 0.9);
+      .style("opacity", showLabels ? 0.9 : 0); // Use opacity for transition
 
-    // Hint Animation
-    if (hintName) {
-        g.selectAll("path")
-          .filter((d: any) => {
-              const name = d.properties.name;
-              return name && hintName && (name.toLowerCase() === hintName.toLowerCase() || name.includes(hintName));
-          })
-          .transition().duration(500)
-          .attr("fill", "#FDE047")
-          .transition().duration(500)
-          .attr("fill", (d: any, i) => colors[i % colors.length])
-          .on("end", function repeat(this: any) {
-              d3.select(this)
-                 .transition().duration(500)
-                 .attr("fill", "#FDE047")
-                 .transition().duration(500)
-                 .attr("fill", (d: any) => "#FDE047") // Simplify for loop
-                 .on("end", repeat);
-          });
-    }
+  }, [geoData, dimensions]); // Only redraw if data or size changes
 
-  }, [geoData, region, colors, correctName, errorName, onRegionClick, hintName, showLabels, dimensions]);
+
+  // Fast Updates (Color/Labels/Hints) - Cheap
+  useEffect(() => {
+    if (!gRef.current) return;
+    const g = gRef.current;
+
+    // Update Colors
+    g.selectAll<SVGPathElement, GeoFeature>("path")
+     .transition().duration(300) // Smooth transition
+     .attr("fill", (d, i) => {
+         const name = d.properties.name;
+         if (name === correctName) return "#4ade80"; // Green
+         if (name === errorName) return "#ef4444"; // Red
+         return colors[i % colors.length];
+     });
+
+    // Hint Animation Logic
+    g.selectAll<SVGPathElement, GeoFeature>("path")
+     .on("end", null) // Stop previous loops
+     .filter(d => {
+         const name = d.properties.name;
+         return !!(name && hintName && (name.toLowerCase() === hintName.toLowerCase() || name.includes(hintName)));
+     })
+     .transition().duration(500)
+     .attr("fill", "#FDE047") // Yellow
+     .transition().duration(500)
+     .attr("fill", (d: any, i: number) => colors[i % colors.length])
+     .on("end", function repeat(this: any) {
+        d3.select(this)
+            .transition().duration(500)
+            .attr("fill", "#FDE047")
+            .transition().duration(500)
+            .attr("fill", (d: any, i: number) => colors[i % colors.length]) // Just reuse base color logic approx
+            .on("end", repeat);
+     });
+
+    // Toggle Labels
+    g.selectAll(".map-label")
+     .style("opacity", (d: any) => {
+         // Always show correct name label if defined
+         if (d.properties.name === correctName) return 1;
+         return showLabels ? 0.9 : 0;
+     });
+
+  }, [correctName, errorName, hintName, showLabels, colors]); // Runs on game interactions
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-sky-200 rounded-3xl overflow-hidden shadow-[inset_0_4px_8px_rgba(0,0,0,0.2)] border-8 border-white touch-none">
