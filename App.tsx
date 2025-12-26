@@ -134,7 +134,7 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="flex flex-col h-screen w-full bg-gradient-to-b from-sky-300 to-sky-100 font-fredoka overflow-hidden select-none">
+    <div className="flex flex-col min-h-screen w-full bg-gradient-to-b from-sky-300 to-sky-100 font-fredoka select-none overflow-x-hidden">
       <CloudBackground />
 
       {/* Top Bar */}
@@ -194,16 +194,16 @@ const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col gap-4 relative">
-            {/* Score Badge */}
+          <div className="w-full flex flex-col gap-4 relative flex-grow">
+            {/* Score Badge - Fixed position is okay, but ensure it doesn't overlap on small screens */}
             {mode === GameMode.FIND && (
-              <div className="absolute top-2 right-2 z-30 bg-yellow-400 text-yellow-900 px-6 py-2 rounded-full font-black text-xl shadow-lg border-4 border-white transform rotate-2">
+              <div className="absolute top-2 right-2 z-30 bg-yellow-400 text-yellow-900 px-4 py-1 md:px-6 md:py-2 rounded-full font-black text-lg md:text-xl shadow-lg border-4 border-white transform rotate-2">
                 ⭐ {score}
               </div>
             )}
 
-            {/* Map */}
-            <div className="flex-grow w-full relative">
+            {/* Map - Give it min-height so it's usable on mobile */}
+            <div className="w-full relative flex-grow min-h-[50vh] md:min-h-0">
               <MapComponent
                 region={region}
                 onRegionClick={handleRegionClick}
@@ -216,19 +216,19 @@ const App: React.FC = () => {
               {showConfetti && <Confetti />}
             </div>
 
-            {/* Character Box / HUD */}
-            <div className="flex-none h-32 md:h-40 bg-white rounded-[2rem] shadow-xl mx-2 mb-2 flex items-center p-4 relative overflow-visible border-b-8 border-gray-200">
+            {/* Character Box / HUD - Stack naturally */}
+            <div className="flex-none bg-white rounded-[2rem] shadow-xl mx-2 mb-4 flex items-center p-4 relative overflow-visible border-b-8 border-gray-200 mt-8 md:mt-0">
               {/* Mascot Circle */}
-              <div className="absolute -top-10 left-4 md:left-10 w-24 h-24 md:w-32 md:h-32 bg-orange-300 rounded-full border-4 border-white shadow-lg flex items-center justify-center text-5xl md:text-7xl animate-bounce-slow">
+              <div className="absolute -top-6 left-4 md:-top-10 md:left-10 w-20 h-20 md:w-32 md:h-32 bg-orange-300 rounded-full border-4 border-white shadow-lg flex items-center justify-center text-4xl md:text-7xl animate-bounce-slow flex-shrink-0">
                 {feedbackEmoji}
               </div>
 
-              <div className="ml-24 md:ml-40 flex flex-col justify-center w-full">
-                <h2 className="text-2xl md:text-4xl font-black text-gray-800 leading-tight">
+              <div className="ml-20 md:ml-40 flex flex-col justify-center w-full min-h-[80px]">
+                <h2 className="text-xl md:text-4xl font-black text-gray-800 leading-tight">
                   {feedbackMessage}
                 </h2>
                 {mode === GameMode.FIND && currentTarget && mistakesInRound > 2 && (
-                  <p className="text-orange-500 font-bold animate-pulse">
+                  <p className="text-orange-500 font-bold animate-pulse text-sm md:text-base">
                     Look for the flashing yellow shape!
                   </p>
                 )}
